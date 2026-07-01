@@ -3,6 +3,7 @@ package com.waycairn.service
 import android.accessibilityservice.AccessibilityService
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
+import com.waycairn.service.overlay.OverlayController
 
 /**
  * Phase 3: foreground app detection only.
@@ -28,6 +29,12 @@ class WaycairnAccessibilityService : AccessibilityService() {
         if (pkg != currentForegroundPackage) {
             currentForegroundPackage = pkg
             Log.d(TAG, "Foreground package: $pkg")
+
+            // TEMP dev trigger (Phase 4): fire the overlay when Chrome comes to the foreground so
+            // the friction screen can be tested live. Real trigger logic lands in Phase 5.
+            if (pkg == DEV_TRIGGER_PACKAGE) {
+                OverlayController.show(this)
+            }
         }
     }
 
@@ -38,5 +45,6 @@ class WaycairnAccessibilityService : AccessibilityService() {
     companion object {
         private const val TAG = "WaycairnA11y"
         private const val SYSTEM_UI_PACKAGE = "com.android.systemui"
+        private const val DEV_TRIGGER_PACKAGE = "com.android.chrome"
     }
 }
