@@ -4,53 +4,139 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.waycairn.data.prefs.ThemeMode
+import com.waycairn.ui.apps.AppPickerScreen
+import com.waycairn.ui.calendar.CalendarScreen
+import com.waycairn.ui.habits.HabitDetailScreen
+import com.waycairn.ui.habits.HabitEditScreen
+import com.waycairn.ui.habits.HabitListScreen
+import com.waycairn.ui.nav.Routes
+import com.waycairn.ui.settings.SettingsScreen
 import com.waycairn.ui.theme.WaycairnTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val settingsStore = (application as WaycairnApp).settingsStore
         setContent {
-            WaycairnTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    PlaceholderScreen()
+            val themeMode by settingsStore.themeMode.collectAsStateWithLifecycle(ThemeMode.SYSTEM)
+            val darkTheme = when (themeMode) {
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+            }
+            WaycairnTheme(darkTheme = darkTheme) {
+                WaycairnRoot()
+            }
+        }
+    }
+}
+
+private data class BottomDestination(val route: String, val label: String, val glyph: String)
+
+private val bottomDestinations = listOf(
+    BottomDestination(Routes.HABITS, "Habits", "◈"),
+    BottomDestination(Routes.CALENDAR, "Calendar", "▦"),
+    BottomDestination(Routes.APPS, "Apps", "◱"),
+    BottomDestination(Routes.SETTINGS, "Settings", "⚙")
+)
+
+@Composable
+fun WaycairnRoot() {
+    val navController = rememberNavController()
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination?.route
+    val showBottomBar = currentRoute in Routes.bottomNav
+
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        bottomBar = {
+            if (showBottomBar) {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+                    bottomDestinations.forEach { dest ->
+                        NavigationBarItem(
+                            selected = currentRoute == dest.route,
+                            onClick = {
+                                if (currentRoute != dest.route) {
+                                    navController.navigate(dest.route) {
+                                        popUpTo(Routes.HABITS) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            },
+                            icon = { Text(dest.glyph, style = MaterialTheme.typography.titleMedium) },
+                            label = { Text(dest.label, style = MaterialTheme.typography.labelMedium) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.surfaceVariant,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
+                    }
                 }
             }
         }
+    ) { padding ->
+        NavHost(
+            navController = navController,
+            startDestination = Routes.HABITS,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            composable(Routes.HABITS) {
+                HabitListScreen(
+                    onAddHabit = { navController.navigate(Routes.habitEdit()) },
+                    onOpenHabit = { id -> navController.navigate(Routes.habitDetail(id)) }
+                )
+            }
+            composable(Routes.CALENDAR) { CalendarScreen() }
+            composable(Routes.APPS) { AppPickerScreen() }
+            composable(Routes.SETTINGS) { SettingsScreen() }
 
-    }
-}
-
-@Composable
-fun PlaceholderScreen(modifier: Modifier = Modifier) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = modifier.fillMaxSize()
-    ) {
-        Text(
-            text = "waycairn",
-            style = MaterialTheme.typography.headlineLarge,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun PlaceholderScreenPreview() {
-    WaycairnTheme {
-        PlaceholderScreen()
+            composable(
+                route = Routes.HABIT_DETAIL,
+                arguments = listOf(navArgument(Routes.ARG_HABIT_ID) { type = NavType.LongType })
+            ) {
+                HabitDetailScreen(
+                    onBack = { navController.popBackStack() },
+                    onEdit = { id -> navController.navigate(Routes.habitEdit(id)) }
+                )
+            }
+            composable(
+                route = Routes.HABIT_EDIT,
+                arguments = listOf(
+                    navArgument(Routes.ARG_HABIT_ID) {
+                        type = NavType.LongType
+                        defaultValue = -1L
+                    }
+                )
+            ) {
+                HabitEditScreen(onDone = { navController.popBackStack() })
+            }
+        }
     }
 }

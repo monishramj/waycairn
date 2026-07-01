@@ -143,6 +143,24 @@ class HabitRepository(
                 .eachCount()
         }
 
+    /** Set of local dates on which the given habit has at least one completion (for the dot strip). */
+    fun habitCompletionDates(habitId: Long): Flow<Set<LocalDate>> =
+        completionDao.observeAll().map { all ->
+            all.asSequence()
+                .filter { it.habitId == habitId }
+                .map { DayRange.localDateOf(it.completedAt) }
+                .toHashSet()
+        }
+
+    /** The habits that have >=1 completion on [date] (local timezone) — for the calendar day sheet. */
+    suspend fun completedHabitsOn(date: LocalDate): List<Habit> = withContext(Dispatchers.IO) {
+        val day = DayRange.dayFor(date)
+        val ids = completionDao.getInRange(day.startMillis, day.endMillis)
+            .map { it.habitId }
+            .distinct()
+        ids.mapNotNull { habitDao.getById(it) }
+    }
+
     // ---- helpers ------------------------------------------------------------
 
     private fun consecutiveDaysEndingNear(days: Set<LocalDate>, today: LocalDate): Int {
