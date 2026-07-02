@@ -4,6 +4,9 @@ package com.waycairn.ui.nav
 object Routes {
     const val ARG_HABIT_ID = "habitId"
 
+    // First-run
+    const val ONBOARDING = "onboarding"
+
     // Bottom-nav destinations
     const val HABITS = "habits"
     const val CALENDAR = "calendar"

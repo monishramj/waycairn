@@ -10,7 +10,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -23,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -39,6 +42,7 @@ import com.waycairn.ui.habits.HabitDetailScreen
 import com.waycairn.ui.habits.HabitEditScreen
 import com.waycairn.ui.habits.HabitListScreen
 import com.waycairn.ui.nav.Routes
+import com.waycairn.ui.onboarding.OnboardingScreen
 import com.waycairn.ui.settings.SettingsScreen
 import com.waycairn.ui.theme.WaycairnTheme
 
@@ -63,10 +67,15 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
             }
+            // null = not yet loaded from DataStore; avoids flashing the wrong start screen.
+            val onboardingComplete by produceState<Boolean?>(initialValue = null) {
+                settingsStore.onboardingComplete.collect { value = it }
+            }
             WaycairnTheme(darkTheme = darkTheme) {
                 WaycairnRoot(
                     pendingHabitId = pendingHabitId,
-                    onHabitConsumed = { pendingHabitId = null }
+                    onHabitConsumed = { pendingHabitId = null },
+                    onboardingComplete = onboardingComplete
                 )
             }
         }
@@ -111,8 +120,19 @@ private val bottomDestinations = listOf(
 @Composable
 fun WaycairnRoot(
     pendingHabitId: Long? = null,
-    onHabitConsumed: () -> Unit = {}
+    onHabitConsumed: () -> Unit = {},
+    onboardingComplete: Boolean? = true
 ) {
+    // Not yet loaded from DataStore — render nothing rather than flash the wrong start screen.
+    if (onboardingComplete == null) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        )
+        return
+    }
+
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
@@ -159,11 +179,20 @@ fun WaycairnRoot(
     ) { padding ->
         NavHost(
             navController = navController,
-            startDestination = Routes.HABITS,
+            startDestination = if (onboardingComplete) Routes.HABITS else Routes.ONBOARDING,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            composable(Routes.ONBOARDING) {
+                OnboardingScreen(
+                    onFinished = {
+                        navController.navigate(Routes.HABITS) {
+                            popUpTo(Routes.ONBOARDING) { inclusive = true }
+                        }
+                    }
+                )
+            }
             composable(Routes.HABITS) {
                 HabitListScreen(
                     onAddHabit = { navController.navigate(Routes.habitEdit()) },

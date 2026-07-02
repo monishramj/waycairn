@@ -2,6 +2,7 @@ package com.waycairn.ui.apps
 
 import android.app.Application
 import android.content.Intent
+import android.content.pm.PackageManager
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -55,11 +56,14 @@ class AppPickerViewModel(
             val ownPackage = getApplication<Application>().packageName
             val loaded = withContext(Dispatchers.IO) {
                 val pm = getApplication<Application>().packageManager
+                val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                val launcherPackage = pm.resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)
+                    ?.activityInfo?.packageName
                 val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
                 pm.queryIntentActivities(intent, 0)
                     .asSequence()
                     .map { it.activityInfo.packageName }
-                    .filter { it != ownPackage }
+                    .filter { it != ownPackage && it != launcherPackage }
                     .distinct()
                     .mapNotNull { pkg ->
                         runCatching {

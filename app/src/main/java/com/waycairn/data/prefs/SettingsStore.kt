@@ -3,6 +3,7 @@ package com.waycairn.data.prefs
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -25,6 +26,7 @@ class SettingsStore(private val context: Context) {
         val GLOBAL_MESSAGE = stringPreferencesKey("global_message")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val UNLOCK_COUNT = intPreferencesKey("unlock_count")
+        val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
     }
 
     val globalMessage: Flow<String> = context.dataStore.data.map { prefs ->
@@ -38,6 +40,11 @@ class SettingsStore(private val context: Context) {
 
     val unlockCount: Flow<Int> = context.dataStore.data.map { prefs ->
         prefs[Keys.UNLOCK_COUNT] ?: 0
+    }
+
+    /** True once the user has been through (or explicitly finished) first-run onboarding. */
+    val onboardingComplete: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.ONBOARDING_COMPLETE] ?: false
     }
 
     suspend fun setGlobalMessage(message: String) {
@@ -60,6 +67,10 @@ class SettingsStore(private val context: Context) {
             prefs[Keys.UNLOCK_COUNT] = updated
         }
         return updated
+    }
+
+    suspend fun setOnboardingComplete(complete: Boolean) {
+        context.dataStore.edit { it[Keys.ONBOARDING_COMPLETE] = complete }
     }
 
     companion object {

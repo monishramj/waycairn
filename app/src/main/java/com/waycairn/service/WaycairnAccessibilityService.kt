@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.provider.Settings
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
@@ -60,6 +61,13 @@ class WaycairnAccessibilityService : AccessibilityService() {
      */
     private val imePackages: Set<String> by lazy { loadImePackages() }
 
+    /**
+     * The device's current default home-screen launcher. Resolved once and cached — never treated
+     * as a "foreground app" the interceptor can gate, even defensively (it can't appear in the app
+     * picker in the first place, but a stale/manually-added AppSetting row should still be inert).
+     */
+    private val launcherPackage: String? by lazy { resolveLauncherPackage() }
+
     private var serviceScope = newScope()
 
     /** Dynamically-registered ACTION_USER_PRESENT receiver (manifest registration is unreliable). */
@@ -98,9 +106,9 @@ class WaycairnAccessibilityService : AccessibilityService() {
 
         val pkg = event.packageName?.toString() ?: return
 
-        // Ignore our own overlay/UI and the system UI shell — neither is a "foreground app" the
-        // interceptor should react to.
-        if (pkg == packageName || pkg == SYSTEM_UI_PACKAGE) return
+        // Ignore our own overlay/UI, the system UI shell, and the home-screen launcher — none of
+        // these is a "foreground app" the interceptor should ever react to.
+        if (pkg == packageName || pkg == SYSTEM_UI_PACKAGE || pkg == launcherPackage) return
 
         // A keyboard popping up/down is not an app switch; ignore it so it can't reset the session.
         if (pkg in imePackages) return
@@ -211,6 +219,15 @@ class WaycairnAccessibilityService : AccessibilityService() {
             ?.let(result::add)
         Log.d(TAG, "IME packages ignored: $result")
         return result
+    }
+
+    private fun resolveLauncherPackage(): String? {
+        val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val pkg = packageManager
+            .resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)
+            ?.activityInfo?.packageName
+        Log.d(TAG, "Default launcher package: $pkg")
+        return pkg
     }
 
     companion object {
