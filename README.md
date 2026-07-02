@@ -4,7 +4,9 @@ WayCairn is a native Android **friction layer and daily habit tracker**. When yo
 
 **THIS IS A MAINLY VIBE-CODED APP** made for personal use and experimentation.
 
-![WayCairn](app-screenshot.png)
+<p align="center">
+  <img src="docs/waycairn_logo.png" alt="WayCairn logo" width="180">
+</p>
 
 ## What it does
 
