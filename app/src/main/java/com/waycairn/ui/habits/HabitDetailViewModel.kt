@@ -20,6 +20,7 @@ data class DayDot(val date: LocalDate, val done: Boolean)
 data class HabitDetailUiState(
     val habit: Habit? = null,
     val streak: Int = 0,
+    val bestStreak: Int = 0,
     val lastDays: List<DayDot> = emptyList()
 )
 
@@ -32,14 +33,20 @@ class HabitDetailViewModel(
         combine(
             repository.observeHabit(habitId),
             repository.perHabitStreak(habitId),
+            repository.perHabitBestStreak(habitId),
             repository.habitCompletionDates(habitId)
-        ) { habit, streak, dates ->
+        ) { habit, streak, best, dates ->
             val today = LocalDate.now()
             val lastDays = (0 until STRIP_DAYS).map { i ->
                 val date = today.minusDays((STRIP_DAYS - 1 - i).toLong())
                 DayDot(date = date, done = dates.contains(date))
             }
-            HabitDetailUiState(habit = habit, streak = streak, lastDays = lastDays)
+            HabitDetailUiState(
+                habit = habit,
+                streak = streak,
+                bestStreak = maxOf(best, streak),
+                lastDays = lastDays
+            )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),

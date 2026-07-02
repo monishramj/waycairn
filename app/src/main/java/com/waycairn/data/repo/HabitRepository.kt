@@ -131,6 +131,27 @@ class HabitRepository(
             consecutiveDaysEndingNear(days, LocalDate.now())
         }
 
+    /** The longest run of consecutive completed days this habit has ever reached. */
+    fun perHabitBestStreak(habitId: Long): Flow<Int> =
+        completionDao.observeAll().map { all ->
+            val days = all.asSequence()
+                .filter { it.habitId == habitId }
+                .map { DayRange.localDateOf(it.completedAt) }
+                .toSortedSet()
+            longestConsecutiveRun(days)
+        }
+
+    /**
+     * Consecutive days ending today/yesterday with at least one completion of any habit — the
+     * "kept-alive" streak. Doing a single habit keeps this running (a dim day); doing all of them
+     * makes it a full day (see [globalStreak]).
+     */
+    fun anyCompletionStreak(): Flow<Int> =
+        completionDao.observeAll().map { completions ->
+            val days = completions.mapTo(HashSet()) { DayRange.localDateOf(it.completedAt) }
+            consecutiveDaysEndingNear(days, LocalDate.now())
+        }
+
     /**
      * Consecutive "perfect days" ending today/yesterday, where a perfect day = every habit that
      * existed that day (created on/before it, currently non-archived) has >=1 completion that day.
@@ -191,6 +212,19 @@ class HabitRepository(
     }
 
     // ---- helpers ------------------------------------------------------------
+
+    /** Longest run of consecutive calendar days present in [days] (any order). */
+    private fun longestConsecutiveRun(days: Set<LocalDate>): Int {
+        if (days.isEmpty()) return 0
+        val sorted = days.sorted()
+        var best = 1
+        var run = 1
+        for (i in 1 until sorted.size) {
+            run = if (sorted[i] == sorted[i - 1].plusDays(1)) run + 1 else 1
+            if (run > best) best = run
+        }
+        return best
+    }
 
     private fun consecutiveDaysEndingNear(days: Set<LocalDate>, today: LocalDate): Int {
         val anchor = when {

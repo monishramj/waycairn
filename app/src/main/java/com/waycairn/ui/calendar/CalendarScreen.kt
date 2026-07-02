@@ -1,13 +1,19 @@
 package com.waycairn.ui.calendar
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import java.time.YearMonth
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -32,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.waycairn.ui.components.StreakBanner
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -47,6 +54,8 @@ fun CalendarScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val monthLabel = state.month.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault()))
     val maxCount = (state.countsByDay.values.maxOrNull() ?: 0).coerceAtLeast(1)
+    val currentYearMonth = YearMonth.now()
+    val canGoForward = state.month.isBefore(currentYearMonth)
 
     Scaffold(
         modifier = modifier,
@@ -73,6 +82,20 @@ fun CalendarScreen(
                 .padding(padding)
                 .padding(horizontal = 16.dp)
         ) {
+            // Streak section
+            Text(
+                text = "Streak",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(8.dp))
+            StreakBanner(
+                streak = state.streak,
+                level = state.streakLevel
+            )
+            Spacer(Modifier.height(20.dp))
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -84,7 +107,16 @@ fun CalendarScreen(
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onBackground
                 )
-                TextButton(onClick = viewModel::nextMonth) { Text("›") }
+                TextButton(
+                    onClick = viewModel::nextMonth,
+                    enabled = canGoForward
+                ) {
+                    Text(
+                        "›",
+                        color = if (canGoForward) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                    )
+                }
             }
 
             Spacer(Modifier.height(8.dp))
@@ -94,6 +126,7 @@ fun CalendarScreen(
                 month = state.month,
                 counts = state.countsByDay,
                 maxCount = maxCount,
+                today = LocalDate.now(),
                 onDayClick = viewModel::selectDay
             )
         }
@@ -115,25 +148,71 @@ fun CalendarScreen(
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                Spacer(Modifier.height(12.dp))
-                if (selection.habits.isEmpty()) {
+                Spacer(Modifier.height(16.dp))
+
+                if (selection.completed.isEmpty() && selection.missed.isEmpty()) {
                     Text(
-                        "No habits completed this day.",
+                        "Nothing recorded this day.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                } else {
-                    selection.habits.forEach { habit ->
-                        Text(
-                            text = "· ${habit.title}",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
-                    }
                 }
+
+                if (selection.completed.isNotEmpty()) {
+                    DaySheetSection(
+                        title = "Completed",
+                        habits = selection.completed,
+                        marker = "◆",
+                        markerColor = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                if (selection.missed.isNotEmpty()) {
+                    if (selection.completed.isNotEmpty()) Spacer(Modifier.height(16.dp))
+                    DaySheetSection(
+                        title = "Missed",
+                        habits = selection.missed,
+                        marker = "◇",
+                        markerColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
                 Spacer(Modifier.height(24.dp))
             }
+        }
+    }
+}
+
+@Composable
+private fun DaySheetSection(
+    title: String,
+    habits: List<com.waycairn.data.model.Habit>,
+    marker: String,
+    markerColor: Color
+) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(Modifier.height(6.dp))
+    habits.forEach { habit ->
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = marker,
+                style = MaterialTheme.typography.bodyLarge,
+                color = markerColor,
+                modifier = Modifier.padding(end = 10.dp)
+            )
+            Text(
+                text = habit.title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
         }
     }
 }
@@ -163,15 +242,14 @@ private fun MonthGrid(
     month: java.time.YearMonth,
     counts: Map<LocalDate, Int>,
     maxCount: Int,
+    today: LocalDate,
     onDayClick: (LocalDate) -> Unit
 ) {
     val firstDay = month.atDay(1)
-    // Monday = 0 ... Sunday = 6
     val leadingBlanks = (firstDay.dayOfWeek.value + 6) % 7
     val daysInMonth = month.lengthOfMonth()
     val cells = leadingBlanks + daysInMonth
     val rows = (cells + 6) / 7
-    val today = LocalDate.now()
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         for (row in 0 until rows) {
@@ -190,6 +268,7 @@ private fun MonthGrid(
                                 count = counts[date] ?: 0,
                                 maxCount = maxCount,
                                 isToday = date == today,
+                                isFuture = date.isAfter(today),
                                 onClick = { onDayClick(date) }
                             )
                         }
@@ -206,35 +285,48 @@ private fun DayCell(
     count: Int,
     maxCount: Int,
     isToday: Boolean,
+    isFuture: Boolean,
     onClick: () -> Unit
 ) {
     val base = MaterialTheme.colorScheme.surfaceVariant
     val accent = MaterialTheme.colorScheme.primary
-    // intensity ramp: empty surface -> full accent
-    val fill = if (count == 0) {
-        base
-    } else {
-        val t = (count.toFloat() / maxCount).coerceIn(0.25f, 1f)
-        lerp(base, accent, t)
+    val ring = MaterialTheme.colorScheme.primary
+    val futureColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+
+    val targetFill = when {
+        isFuture -> futureColor
+        count == 0 -> base
+        else -> {
+            val steps = 4
+            val raw = (count.toFloat() / maxCount).coerceIn(0f, 1f)
+            val stepped = (kotlin.math.ceil(raw * steps) / steps).coerceIn(0.3f, 1f)
+            lerp(base, accent, stepped)
+        }
     }
+    val fill by animateColorAsState(
+        targetValue = targetFill,
+        animationSpec = tween(durationMillis = 200),
+        label = "dayFill"
+    )
+
+    // Circle shape — aspectRatio(1f) on the parent Box guarantees it's square.
+    val shape = androidx.compose.foundation.shape.CircleShape
+    val ringModifier = if (isToday) {
+        Modifier.border(BorderStroke(2.dp, ring), shape)
+    } else {
+        Modifier
+    }
+
     Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .fillMaxSize()
+            .clip(shape)
             .background(fill)
-            .clickable(onClick = onClick),
+            .then(ringModifier)
+            .clickable(enabled = !isFuture, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = date.dayOfMonth.toString(),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-            color = if (count == 0) {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            } else {
-                MaterialTheme.colorScheme.onPrimary
-            }
-        )
+        // No day number shown — just a coloured circle.
     }
 }
 

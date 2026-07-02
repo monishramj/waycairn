@@ -106,14 +106,7 @@ fun HabitDetailScreen(
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
-                    Text(
-                        text = if (state.streak == 1) "1 day streak" else "${state.streak} day streak",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    StrengthArc(streak = state.streak)
+                    StrengthArc(streak = state.streak, bestStreak = state.bestStreak)
                 }
             }
 

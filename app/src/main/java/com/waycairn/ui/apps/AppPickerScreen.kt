@@ -17,12 +17,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -55,6 +59,12 @@ fun AppPickerScreen(
     val loading by viewModel.loading.collectAsStateWithLifecycle()
 
     var configPackage by remember { mutableStateOf<String?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
+    val filteredApps = remember(apps, searchQuery) {
+        val q = searchQuery.trim()
+        if (q.isEmpty()) apps
+        else apps.filter { it.label.contains(q, ignoreCase = true) }
+    }
 
     Scaffold(
         modifier = modifier,
@@ -63,7 +73,7 @@ fun AppPickerScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Gated apps",
+                        "Apps",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -75,26 +85,57 @@ fun AppPickerScreen(
             )
         }
     ) { padding ->
-        if (loading) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-            }
-        } else {
-            LazyColumn(
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            // Search bar pinned directly under the top bar — does not scroll with the list.
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                items(apps, key = { it.packageName }) { app ->
-                    val setting = gated[app.packageName]
-                    AppRow(
-                        app = app,
-                        setting = setting,
-                        onToggle = { checked -> viewModel.setGated(app.packageName, checked) },
-                        onOpenConfig = { if (setting != null) configPackage = app.packageName }
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                placeholder = { Text("Search apps") },
+                leadingIcon = {
+                    Icon(imageVector = Icons.Filled.Search, contentDescription = null)
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(50)
+            )
+
+            if (loading) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                }
+            } else if (filteredApps.isEmpty()) {
+                Box(
+                    Modifier.fillMaxSize().padding(16.dp),
+                    contentAlignment = Alignment.TopStart
+                ) {
+                    Text(
+                        text = if (searchQuery.isBlank()) "No apps found"
+                        else "No matches for \"$searchQuery\"",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(filteredApps, key = { it.packageName }) { app ->
+                        val setting = gated[app.packageName]
+                        AppRow(
+                            app = app,
+                            setting = setting,
+                            onToggle = { checked -> viewModel.setGated(app.packageName, checked) },
+                            onOpenConfig = { if (setting != null) configPackage = app.packageName }
+                        )
+                    }
                 }
             }
         }
@@ -103,7 +144,8 @@ fun AppPickerScreen(
     val pkg = configPackage
     if (pkg != null) {
         val setting = gated[pkg] ?: AppSetting(packageName = pkg)
-        val label = apps.firstOrNull { it.packageName == pkg }?.label ?: pkg
+        val app = apps.firstOrNull { it.packageName == pkg }
+        val label = app?.label ?: pkg
         val sheetState = rememberModalBottomSheetState()
         ModalBottomSheet(
             onDismissRequest = { configPackage = null },
@@ -112,6 +154,7 @@ fun AppPickerScreen(
         ) {
             AppConfigSheet(
                 label = label,
+                icon = app?.icon,
                 setting = setting,
                 onSave = { mode, delay, showAfter ->
                     viewModel.updateConfig(pkg, mode, delay, showAfter)
@@ -133,7 +176,7 @@ private fun AppRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(50))
             .clickable(enabled = isGated, onClick = onOpenConfig)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -181,6 +224,7 @@ private fun AppRow(
 @Composable
 private fun AppConfigSheet(
     label: String,
+    icon: androidx.compose.ui.graphics.ImageBitmap?,
     setting: AppSetting,
     onSave: (TriggerMode, Int, Boolean) -> Unit
 ) {
@@ -189,12 +233,28 @@ private fun AppConfigSheet(
     var showAfter by remember { mutableStateOf(setting.showAfterComplete) }
 
     Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                if (icon != null) {
+                    Image(bitmap = icon, contentDescription = label, modifier = Modifier.size(32.dp))
+                } else {
+                    Text(label.take(1).uppercase(), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(start = 12.dp)
+            )
+        }
         Spacer(Modifier.height(16.dp))
 
         Text("Trigger", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
@@ -240,18 +300,12 @@ private fun AppConfigSheet(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "Show even when all done",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    "Pure-friction: overlay still fires with nothing left.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(
+                "Show even when all tasks done",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
             Switch(checked = showAfter, onCheckedChange = { showAfter = it })
         }
 
