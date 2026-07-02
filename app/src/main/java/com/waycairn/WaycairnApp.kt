@@ -6,6 +6,8 @@ import com.waycairn.data.model.Habit
 import com.waycairn.data.prefs.SettingsStore
 import com.waycairn.data.repo.AppSettingRepository
 import com.waycairn.data.repo.HabitRepository
+import com.waycairn.notification.AlarmScheduler
+import com.waycairn.notification.Notifs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -30,8 +32,11 @@ class WaycairnApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        if (BuildConfig.DEBUG) {
-            appScope.launch { seedIfFirstRun() }
+        Notifs.createChannels(this)
+        appScope.launch {
+            if (BuildConfig.DEBUG) seedIfFirstRun()
+            // Rebuild today's alarms on every cold start (also re-arms the daily 00:01 anchor).
+            AlarmScheduler.rescheduleAll(this@WaycairnApp)
         }
     }
 

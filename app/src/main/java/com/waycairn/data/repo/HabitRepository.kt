@@ -81,6 +81,35 @@ class HabitRepository(
                 .toList()
         }
 
+    /** One-shot: all non-archived habits (for alarm scheduling off the main thread). */
+    suspend fun activeHabitsSnapshot(): List<Habit> = withContext(Dispatchers.IO) {
+        habitDao.getActive()
+    }
+
+    /** One-shot: is this habit still incomplete for today's local-timezone range? */
+    suspend fun isIncompleteToday(habitId: Long): Boolean = withContext(Dispatchers.IO) {
+        val today = DayRange.today()
+        completionDao.countForHabitInRange(habitId, today.startMillis, today.endMillis) == 0
+    }
+
+    /**
+     * One-shot snapshot of today's incomplete habits, timed-first ascending by deadline then untimed
+     * last — same ordering as [incompleteToday], for receivers/services that need a value now.
+     */
+    suspend fun incompleteTodaySnapshot(): List<Habit> = withContext(Dispatchers.IO) {
+        val today = DayRange.today()
+        val completedIds = completionDao.getInRange(today.startMillis, today.endMillis)
+            .mapTo(HashSet()) { it.habitId }
+        habitDao.getActive()
+            .asSequence()
+            .filter { it.id !in completedIds }
+            .sortedWith(
+                compareBy(nullsLast<Int>()) { h: Habit -> h.deadlineMinutes }
+                    .thenBy { it.createdAt }
+            )
+            .toList()
+    }
+
     /** Toggle today's completion: insert one if none exists today, else delete today's row(s). */
     suspend fun toggleCompletionForToday(habitId: Long) = withContext(Dispatchers.IO) {
         val today = DayRange.today()

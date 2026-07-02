@@ -1,6 +1,7 @@
 package com.waycairn.service.overlay
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
@@ -10,11 +11,13 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.waycairn.MainActivity
+import com.waycairn.data.model.Habit
 
 /**
- * Phase 4: builds a ComposeView hosting [OverlayContent], attaches an [OverlayLifecycleOwner], and
- * adds it to the WindowManager as a full-screen application overlay. All add/remove happens on the
- * main thread and double-adds are guarded against.
+ * Phase 5: builds a ComposeView hosting [OverlayContent] with real data, attaches an
+ * [OverlayLifecycleOwner], and adds it to the WindowManager as a full-screen application overlay.
+ * All add/remove happens on the main thread and double-adds are guarded against.
  */
 object OverlayController {
 
@@ -27,7 +30,8 @@ object OverlayController {
 
     val isShowing: Boolean get() = composeView != null
 
-    fun show(context: Context) {
+    fun show(context: Context, message: String, habits: List<Habit>) {
+        val appContext = context.applicationContext
         runOnMain {
             if (composeView != null) {
                 Log.d(TAG, "show() ignored — overlay already added")
@@ -35,16 +39,24 @@ object OverlayController {
             }
 
             val windowManager =
-                context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                appContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
             val owner = OverlayLifecycleOwner().apply { onCreate() }
 
-            val view = ComposeView(context).apply {
+            val view = ComposeView(appContext).apply {
                 setViewTreeLifecycleOwner(owner)
                 setViewTreeViewModelStoreOwner(owner)
                 setViewTreeSavedStateRegistryOwner(owner)
                 setContent {
-                    OverlayContent(onContinue = { remove() })
+                    OverlayContent(
+                        message = message,
+                        habits = habits,
+                        onHabitClick = { habitId ->
+                            launchHabitDetail(appContext, habitId)
+                            remove()
+                        },
+                        onContinue = { remove() }
+                    )
                 }
             }
 
@@ -86,6 +98,15 @@ object OverlayController {
         composeView = null
         lifecycleOwner = null
         Log.d(TAG, "Overlay removed")
+    }
+
+    /** Opens MainActivity deep-linked to a habit's detail. Launched from a non-activity context. */
+    private fun launchHabitDetail(context: Context, habitId: Long) {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            putExtra(MainActivity.EXTRA_HABIT_ID, habitId)
+        }
+        context.startActivity(intent)
     }
 
     private fun runOnMain(block: () -> Unit) {

@@ -1,5 +1,6 @@
 package com.waycairn.ui.habits
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewModelScope
@@ -7,6 +8,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.waycairn.data.model.Habit
 import com.waycairn.data.repo.HabitRepository
+import com.waycairn.notification.AlarmScheduler
 import com.waycairn.ui.nav.Routes
 import com.waycairn.ui.waycairnApp
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +27,7 @@ data class HabitEditState(
 
 class HabitEditViewModel(
     private val repository: HabitRepository,
+    private val appContext: Context,
     private val habitId: Long
 ) : ViewModel() {
 
@@ -89,6 +92,8 @@ class HabitEditViewModel(
                     )
                 )
             }
+            // Habit create/edit changes today's timed alarms — rebuild them.
+            AlarmScheduler.rescheduleAll(appContext)
             onDone()
         }
     }
@@ -100,6 +105,9 @@ class HabitEditViewModel(
         }
         viewModelScope.launch {
             repository.deleteHabit(habitId)
+            // Drop the deleted habit's alarms, then rebuild the rest of today's.
+            AlarmScheduler.cancelHabit(appContext, habitId)
+            AlarmScheduler.rescheduleAll(appContext)
             onDone()
         }
     }
@@ -109,7 +117,8 @@ class HabitEditViewModel(
             initializer {
                 val handle = createSavedStateHandle()
                 val id = handle.get<Long>(Routes.ARG_HABIT_ID) ?: -1L
-                HabitEditViewModel(waycairnApp().habitRepository, id)
+                val app = waycairnApp()
+                HabitEditViewModel(app.habitRepository, app, id)
             }
         }
     }

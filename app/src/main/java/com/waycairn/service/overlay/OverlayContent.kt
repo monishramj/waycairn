@@ -1,6 +1,7 @@
 package com.waycairn.service.overlay
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,7 +10,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -24,19 +27,30 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.waycairn.data.model.Habit
+import com.waycairn.ui.components.deadlineLabel
 import com.waycairn.ui.theme.WaycairnTheme
 import kotlinx.coroutines.delay
 
 private const val COUNTDOWN_SECONDS = 5
 
 /**
- * Phase 4: hardcoded full-screen friction screen. Real message + habit list + trigger wiring
- * arrive in Phase 5. Shows a placeholder message, a fake habit list, a 5-second countdown, and a
+ * Phase 5: full-screen friction screen with real data. Shows the global overlay [message], the
+ * sorted incomplete [habits] (timed-by-deadline first, untimed last), a 5-second countdown, and a
  * "Continue" button that stays disabled until the countdown reaches 0.
+ *
+ * Tapping a habit row invokes [onHabitClick] (opens that habit's detail and dismisses the overlay).
+ * Habits are NOT completable from here.
  */
 @Composable
-fun OverlayContent(onContinue: () -> Unit) {
+fun OverlayContent(
+    message: String,
+    habits: List<Habit>,
+    onHabitClick: (Long) -> Unit,
+    onContinue: () -> Unit
+) {
     WaycairnTheme {
         var remaining by remember { mutableIntStateOf(COUNTDOWN_SECONDS) }
 
@@ -60,30 +74,40 @@ fun OverlayContent(onContinue: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Before you go in.",
-                    style = MaterialTheme.typography.headlineSmall,
+                    text = message,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "A few things are still unfinished today.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onBackground,
+                    textAlign = TextAlign.Center
                 )
 
                 Spacer(Modifier.height(32.dp))
 
                 Column(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    FakeHabitRow("Evening reflection")
-                    FakeHabitRow("Drink water")
-                    FakeHabitRow("Step outside")
+                    if (habits.isEmpty()) {
+                        Text(
+                            text = "All stones stacked for today.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 24.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    } else {
+                        habits.forEach { habit ->
+                            HabitRow(habit = habit, onClick = { onHabitClick(habit.id) })
+                        }
+                    }
                 }
 
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.height(16.dp))
 
                 Text(
                     text = if (remaining > 0) "$remaining" else "Ready",
@@ -111,21 +135,32 @@ fun OverlayContent(onContinue: () -> Unit) {
 }
 
 @Composable
-private fun FakeHabitRow(title: String) {
+private fun HabitRow(habit: Habit, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 16.dp)
-        )
+                .padding(horizontal = 16.dp, vertical = 14.dp)
+        ) {
+            Text(
+                text = habit.title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = deadlineLabel(habit.deadlineMinutes),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }

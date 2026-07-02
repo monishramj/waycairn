@@ -1,9 +1,15 @@
 package com.waycairn
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -14,7 +20,10 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
@@ -34,9 +43,18 @@ import com.waycairn.ui.settings.SettingsScreen
 import com.waycairn.ui.theme.WaycairnTheme
 
 class MainActivity : ComponentActivity() {
+
+    // Habit id to deep-link to (from an overlay row tap), consumed once by the NavHost.
+    private var pendingHabitId by mutableStateOf<Long?>(null)
+
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* result ignored */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        pendingHabitId = habitIdFromIntent(intent)
+        requestNotificationPermissionIfNeeded()
         val settingsStore = (application as WaycairnApp).settingsStore
         setContent {
             val themeMode by settingsStore.themeMode.collectAsStateWithLifecycle(ThemeMode.SYSTEM)
@@ -46,9 +64,38 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.DARK -> true
             }
             WaycairnTheme(darkTheme = darkTheme) {
-                WaycairnRoot()
+                WaycairnRoot(
+                    pendingHabitId = pendingHabitId,
+                    onHabitConsumed = { pendingHabitId = null }
+                )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        habitIdFromIntent(intent)?.let { pendingHabitId = it }
+    }
+
+    private fun habitIdFromIntent(intent: Intent?): Long? {
+        val id = intent?.getLongExtra(EXTRA_HABIT_ID, -1L) ?: -1L
+        return if (id > 0) id else null
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val granted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    companion object {
+        const val EXTRA_HABIT_ID = "extra_habit_id"
     }
 }
 
@@ -62,11 +109,21 @@ private val bottomDestinations = listOf(
 )
 
 @Composable
-fun WaycairnRoot() {
+fun WaycairnRoot(
+    pendingHabitId: Long? = null,
+    onHabitConsumed: () -> Unit = {}
+) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val showBottomBar = currentRoute in Routes.bottomNav
+
+    LaunchedEffect(pendingHabitId) {
+        pendingHabitId?.let { id ->
+            navController.navigate(Routes.habitDetail(id))
+            onHabitConsumed()
+        }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
