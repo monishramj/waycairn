@@ -1,6 +1,8 @@
 # WayCairn
 
-WayCairn is a native Android **friction layer and daily habit tracker**. When you open an app you've chosen to gate, WayCairn slides a brief full-screen overlay in front of you showing the habits you still haven't finished today — a small, deliberate pause before you scroll. Your habits live in the app itself, with a calendar, streaks, and a per-habit "how built is this?" strength arc.
+WayCairn is a native Android **friction layer and daily habit tracker**. When you open an app you've chosen to gate, WayCairn slides a brief full-screen overlay in front of you showing the habits you still haven't finished today — a small, deliberate pause before you scroll. Your habits live in the app itself, with a calendar, streaks, and a per-habit strength rating.
+
+**THIS IS A MAINLY VIBE-CODED APP** made for personal use and experimentation.
 
 ![WayCairn](app-screenshot.png)
 
